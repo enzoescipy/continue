@@ -11,11 +11,13 @@ export const contextSchema = z.object({
 
 const mcpServerSchema = z.object({
   name: z.string(),
-  command: z.string(),
+  command: z.string().optional(),
   faviconUrl: z.string().optional(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string()).optional(),
-  connectionTimeout: z.number().gt(0).optional()
+  connectionTimeout: z.number().optional(),
+  transport: z.enum(["stdio", "sse", "websocket"]).optional(),
+  url: z.string().url().optional(),
 });
 
 export type MCPServer = z.infer<typeof mcpServerSchema>;

@@ -1,28 +1,29 @@
 import {
-  AssistantUnrolled,
-  BLOCK_TYPES,
-  ConfigResult,
-  ConfigValidationError,
-  isAssistantUnrolledNonNullable,
-  MCPServer,
-  ModelRole,
-  PackageIdentifier,
-  RegistryClient,
-  Rule,
-  unrollAssistant,
-  validateConfigYaml,
+    AssistantUnrolled,
+    BLOCK_TYPES,
+    ConfigResult,
+    ConfigValidationError,
+    isAssistantUnrolledNonNullable,
+    MCPServer,
+    ModelRole,
+    PackageIdentifier,
+    RegistryClient,
+    Rule,
+    unrollAssistant,
+    validateConfigYaml,
 } from "@continuedev/config-yaml";
 import { dirname } from "node:path";
+import { TransportOptions } from "../..";
 
 import {
-  ContinueConfig,
-  ExperimentalMCPOptions,
-  IContextProvider,
-  IDE,
-  IdeInfo,
-  IdeSettings,
-  ILLMLogger,
-  RuleWithSource,
+    ContinueConfig,
+    ExperimentalMCPOptions,
+    IContextProvider,
+    IDE,
+    IdeInfo,
+    IdeSettings,
+    ILLMLogger,
+    RuleWithSource,
 } from "../..";
 import { slashFromCustomCommand } from "../../commands";
 import { MCPManagerSingleton } from "../../context/mcp/MCPManagerSingleton";
@@ -68,7 +69,7 @@ function convertYamlMcpToContinueMcp(
   return {
     transport: {
       type: "stdio",
-      command: server.command,
+      command: server.command ?? "",
       args: server.args ?? [],
       env: server.env,
     },
@@ -437,16 +438,44 @@ async function configYamlToContinueConfig(options: {
   // Trigger MCP server refreshes (Config is reloaded again once connected!)
   const mcpManager = MCPManagerSingleton.getInstance();
   mcpManager.setConnections(
-    (config.mcpServers ?? []).map((server) => ({
-      id: server.name,
-      name: server.name,
-      transport: {
-        type: "stdio",
-        args: [],
-        ...server,
-      },
-      timeout: server.connectionTimeout
-    })),
+    (config.mcpServers ?? []).map((server) => {
+      let transportOptions: TransportOptions;
+      const transportType = (server as any).transport ?? "stdio";
+
+      if (transportType === "stdio") {
+        if (!server.command) {
+          console.error(`MCP Server '${server.name}' is type 'stdio' but missing 'command'`);
+          transportOptions = { type: "stdio", command: "", args: [] };
+        } else {
+          transportOptions = {
+            type: "stdio",
+            command: server.command,
+            args: server.args ?? [],
+            env: server.env,
+          };
+        }
+      } else if (transportType === "sse" || transportType === "websocket") {
+        if (!(server as any).url) {
+          console.error(`MCP Server '${server.name}' is type '${transportType}' but missing 'url'`);
+          transportOptions = { type: transportType, url: "" };
+        } else {
+          transportOptions = {
+            type: transportType,
+            url: (server as any).url,
+          };
+        }
+      } else {
+        console.error(`Unsupported transport type '${transportType}' for MCP Server '${server.name}'`);
+        transportOptions = { type: "stdio", command: "", args: [] };
+      }
+
+      return {
+        id: server.name,
+        name: server.name,
+        transport: transportOptions,
+        timeout: server.connectionTimeout
+      };
+    }),
     false,
   );
 
