@@ -164,3 +164,6 @@ extensions/.continue-debug/
 
 .continuerules
 **/.continue/assistants/
+
+.cursorrules
+.continuerules

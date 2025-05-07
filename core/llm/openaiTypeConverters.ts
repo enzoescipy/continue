@@ -114,10 +114,13 @@ export function toChatBody(
         name: tool.function.name,
         description: tool.function.description,
         parameters: tool.function.parameters,
-        strict: tool.function.strict,
+        strict: tool.function.strict, // TESTBED OPTION
       },
     }));
   }
+
+  console.log("[TESTBED] openAITypeConverter, toChatBody params.tools : ", params.tools)
+  console.log("[TESTBED] openAITypeConverter, toChatBody tool_choice : ", params.tool_choice)
 
   return params;
 }

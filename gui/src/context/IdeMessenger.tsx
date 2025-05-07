@@ -1,17 +1,17 @@
 import { ChatMessage, IDE, PromptLog } from "core";
 import type {
-  FromWebviewProtocol,
-  ToCoreProtocol,
-  ToWebviewProtocol,
+    FromWebviewProtocol,
+    ToCoreProtocol,
+    ToWebviewProtocol,
 } from "core/protocol";
 import { Message } from "core/protocol/messenger";
 import { MessageIde } from "core/protocol/messenger/messageIde";
 import {
-  GeneratorReturnType,
-  GeneratorYieldType,
-  WebviewProtocolGeneratorMessage,
-  WebviewSingleMessage,
-  WebviewSingleProtocolMessage,
+    GeneratorReturnType,
+    GeneratorYieldType,
+    WebviewProtocolGeneratorMessage,
+    WebviewSingleMessage,
+    WebviewSingleProtocolMessage,
 } from "core/protocol/util";
 import { createContext } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -196,6 +196,8 @@ export class IdeMessenger implements IIdeMessenger {
     }) => {
       if (event.data.messageId === messageId) {
         const responseData = event.data.data;
+        console.log("[TESTBED] async *streamRequest: streamRequest received responseData == :", responseData);
+
         if ("error" in responseData) {
           error = responseData.error;
           return;
