@@ -23,6 +23,8 @@ export const PROVIDER_TOOL_SUPPORT: Record<
     ].some((part) => model.toLowerCase().startsWith(part));
   },
   together: (model) => {return true;}, // TESTBED
+  groq: (model) => {return true;}, // TESTBED
+  openrouter: (model) => {return true;}, // TESTBED
   anthropic: (model) => {
     if (
       ["claude-3-5", "claude-3.5", "claude-3-7", "claude-3.7"].some((part) =>
@@ -124,7 +126,7 @@ export const PROVIDER_TOOL_SUPPORT: Record<
         "hermes3",
         "athene-v2",
         "nemotron",
-        // "llama3-groq",
+        "llama3-groq",
         "granite3",
         "granite-3",
         "aya-expanse",
