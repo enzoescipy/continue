@@ -25,6 +25,7 @@ export const PROVIDER_TOOL_SUPPORT: Record<
   together: (model) => {return true;}, // TESTBED
   groq: (model) => {return true;}, // TESTBED
   openrouter: (model) => {return true;}, // TESTBED
+  deepinfra: (model) => {return true;}, // TESTBED
   anthropic: (model) => {
     if (
       ["claude-3-5", "claude-3.5", "claude-3-7", "claude-3.7"].some((part) =>
