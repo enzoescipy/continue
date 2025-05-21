@@ -1,16 +1,17 @@
 import {
-    AssistantUnrolled,
-    BLOCK_TYPES,
-    ConfigResult,
-    ConfigValidationError,
-    isAssistantUnrolledNonNullable,
-    MCPServer,
-    ModelRole,
-    PackageIdentifier,
-    RegistryClient,
-    Rule,
-    unrollAssistant,
-    validateConfigYaml,
+  AssistantUnrolled,
+  BLOCK_TYPES,
+  ConfigResult,
+  ConfigValidationError,
+  isAssistantUnrolledNonNullable,
+  MCPServer,
+  ModelRole,
+  PackageIdentifier,
+  RegistryClient,
+  Rule,
+  TEMPLATE_VAR_REGEX,
+  unrollAssistant,
+  validateConfigYaml,
 } from "@continuedev/config-yaml";
 import { dirname } from "node:path";
 import { TransportOptions } from "../..";
@@ -41,9 +42,8 @@ import { GlobalContext } from "../../util/GlobalContext";
 import { modifyAnyConfigWithSharedConfig } from "../sharedConfig";
 
 import { getControlPlaneEnvSync } from "../../control-plane/env";
-import { logger } from "../../util/logger";
 import { getCleanUriPath } from "../../util/uri";
-import { getAllDotContinueYamlFiles } from "../loadLocalAssistants";
+import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
 
@@ -63,16 +63,41 @@ function convertYamlRuleToContinueRule(rule: Rule): RuleWithSource {
   }
 }
 
-function convertYamlMcpToContinueMcp(
+export function convertYamlMcpToContinueMcp(
   server: MCPServer,
 ): ExperimentalMCPOptions {
+  const transportConfig = (() => {
+    switch (server.type) {
+      case "stdio":
+        return {
+          type: "stdio" as const,
+          command: server.command,
+          args: server.args ?? [],
+          env: server.env,
+        };
+      case "sse":
+        return {
+          type: "sse" as const,
+          url: server.url,
+        };
+      case "websocket":
+        return {
+          type: "websocket" as const,
+          url: server.url,
+        };
+      default:
+        // Default to stdio for backward compatibility
+        return {
+          type: "stdio" as const,
+          command: (server as any).command,
+          args: (server as any).args ?? [],
+          env: (server as any).env,
+        };
+    }
+  })();
+
   return {
-    transport: {
-      type: "stdio",
-      command: server.command ?? "",
-      args: server.args ?? [],
-      env: server.env,
-    },
+    transport: transportConfig,
     timeout: server.connectionTimeout
   };
 }
@@ -97,7 +122,7 @@ async function loadConfigYaml(options: {
   // Add local .continue blocks
   const allLocalBlocks: PackageIdentifier[] = [];
   for (const blockType of BLOCK_TYPES) {
-    const localBlocks = await getAllDotContinueYamlFiles(
+    const localBlocks = await getAllDotContinueDefinitionFiles(
       ide,
       { includeGlobal: true, includeWorkspace: true },
       blockType,
@@ -115,9 +140,9 @@ async function loadConfigYaml(options: {
       ? dirname(getCleanUriPath(packageIdentifier.filePath))
       : undefined;
 
-  logger.info(
-    `Loading config.yaml from ${JSON.stringify(packageIdentifier)} with root path ${rootPath}`,
-  );
+  // logger.info(
+  //   `Loading config.yaml from ${JSON.stringify(packageIdentifier)} with root path ${rootPath}`,
+  // );
 
   let config =
     overrideConfigYaml ??
@@ -242,6 +267,21 @@ async function configYamlToContinueConfig(options: {
     rootUrl: doc.rootUrl,
     faviconUrl: doc.faviconUrl,
   }));
+
+  config.mcpServers?.forEach((mcpServer) => {
+    const mcpArgVariables =
+      (mcpServer.type === "stdio" ? mcpServer.args?.filter((arg) => TEMPLATE_VAR_REGEX.test(arg)) : []) ?? [];
+
+    if (mcpArgVariables.length === 0) {
+      return;
+    }
+
+    localErrors.push({
+      fatal: false,
+      message: `MCP server "${mcpServer.name}" has unsubstituted variables in args: ${mcpArgVariables.join(", ")}. Please refer to https://docs.continue.dev/hub/secrets/secret-types for managing hub secrets.`,
+    });
+  });
+
   continueConfig.experimental = {
     modelContextProtocolServers: config.mcpServers?.map(
       convertYamlMcpToContinueMcp,
@@ -438,44 +478,15 @@ async function configYamlToContinueConfig(options: {
   // Trigger MCP server refreshes (Config is reloaded again once connected!)
   const mcpManager = MCPManagerSingleton.getInstance();
   mcpManager.setConnections(
-    (config.mcpServers ?? []).map((server) => {
-      let transportOptions: TransportOptions;
-      const transportType = (server as any).transport ?? "stdio";
-
-      if (transportType === "stdio") {
-        if (!server.command) {
-          console.error(`MCP Server '${server.name}' is type 'stdio' but missing 'command'`);
-          transportOptions = { type: "stdio", command: "", args: [] };
-        } else {
-          transportOptions = {
-            type: "stdio",
-            command: server.command,
-            args: server.args ?? [],
-            env: server.env,
-          };
-        }
-      } else if (transportType === "sse" || transportType === "websocket") {
-        if (!(server as any).url) {
-          console.error(`MCP Server '${server.name}' is type '${transportType}' but missing 'url'`);
-          transportOptions = { type: transportType, url: "" };
-        } else {
-          transportOptions = {
-            type: transportType,
-            url: (server as any).url,
-          };
-        }
-      } else {
-        console.error(`Unsupported transport type '${transportType}' for MCP Server '${server.name}'`);
-        transportOptions = { type: "stdio", command: "", args: [] };
-      }
-
-      return {
-        id: server.name,
-        name: server.name,
-        transport: transportOptions,
-        timeout: server.connectionTimeout
-      };
-    }),
+    (config.mcpServers ?? []).map((server) => ({
+      id: server.name,
+      name: server.name,
+      transport: {
+        args: [],
+        ...server,
+      },
+      timeout: server.connectionTimeout,
+    })),
     false,
   );
 
